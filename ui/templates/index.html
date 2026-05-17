@@ -1,0 +1,76 @@
+{{template "base.html" .}}
+
+{{define "content"}}
+<div class="row mb-4">
+    <div class="col">
+        <input type="text" id="searchInput" class="form-control" placeholder="Search VODs and Series..." onkeyup="filterLibrary()">
+    </div>
+</div>
+
+<ul class="nav nav-tabs" id="libraryTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="vods-tab" data-bs-toggle="tab" data-bs-target="#vods" type="button" role="tab">VODs</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="series-tab" data-bs-toggle="tab" data-bs-target="#series" type="button" role="tab">Series</button>
+    </li>
+</ul>
+
+<div class="tab-content mt-3" id="libraryTabsContent">
+    <!-- VODs Tab -->
+    <div class="tab-pane fade show active" id="vods" role="tabpanel">
+        <div class="row" id="vodsList">
+            {{range .VODs}}
+            <div class="col-md-4 mb-3 library-item">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">{{.Name}}</h6>
+                        <div class="mt-2">
+                            <select class="form-select form-select-sm mb-2 quality-select">
+                                <option value="Original">Original Quality</option>
+                                <option value="1080p">1080p</option>
+                                <option value="720p">720p</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary w-100" onclick="downloadItem('{{.Name}}', '{{.URI}}', this)">Download</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Series Tab -->
+    <div class="tab-pane fade" id="series" role="tabpanel">
+        <div class="row" id="seriesList">
+            {{range .Series}}
+            <div class="col-md-4 mb-3 library-item">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">{{.Name}}</h6>
+                        <p class="text-muted small">{{len .Seasons}} Seasons</p>
+                        <a href="/series/{{.Name}}" class="btn btn-sm btn-outline-primary w-100">View Episodes</a>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<script>
+function filterLibrary() {
+    let input = document.getElementById('searchInput').value.toLowerCase();
+    let items = document.getElementsByClassName('library-item');
+
+    for (let i = 0; i < items.length; i++) {
+        let title = items[i].querySelector('.card-title').innerText.toLowerCase();
+        if (title.indexOf(input) > -1) {
+            items[i].style.display = "";
+        } else {
+            items[i].style.display = "none";
+        }
+    }
+}
+</script>
+{{end}}

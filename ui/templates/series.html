@@ -1,0 +1,82 @@
+{{template "base.html" .}}
+
+{{define "content"}}
+<div class="mb-4">
+    <a href="/" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to Library</a>
+    <h2>{{.Name}}</h2>
+</div>
+
+{{range $seasonNum, $episodes := .Seasons}}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Season {{$seasonNum}}</h5>
+        <button class="btn btn-sm btn-primary" onclick="downloadSeason('{{$.Name}} S{{$seasonNum}}', this)">Download Entire Season</button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Episode</th>
+                        <th>Title</th>
+                        <th>Quality</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody class="season-list">
+                    {{range $episodes}}
+                    <tr>
+                        <td>{{.Episode}}</td>
+                        <td class="ep-title" data-url="{{.Track.URI}}">{{.Track.Name}}</td>
+                        <td>
+                            <select class="form-select form-select-sm quality-select" style="width: auto;">
+                                <option value="Original">Original Quality</option>
+                                <option value="1080p">1080p</option>
+                                <option value="720p">720p</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="downloadItem('{{.Track.Name}}', '{{.Track.URI}}', this)">Download</button>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<script>
+function downloadSeason(seasonName, btn) {
+    const tbody = btn.closest('.card').querySelector('.season-list');
+    const rows = tbody.querySelectorAll('tr');
+
+    rows.forEach(row => {
+        const titleEl = row.querySelector('.ep-title');
+        const selectEl = row.querySelector('.quality-select');
+
+        const title = titleEl.innerText;
+        const url = titleEl.getAttribute('data-url');
+        const quality = selectEl.value;
+
+        fetch('/api/download', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title: title, url: url, quality: quality})
+        }).then(res => {
+            if (res.ok) {
+                const rowBtn = row.querySelector('button');
+                rowBtn.innerText = 'Queued';
+                rowBtn.classList.replace('btn-outline-primary', 'btn-success');
+                rowBtn.disabled = true;
+            }
+        });
+    });
+
+    btn.innerText = 'Season Queued';
+    btn.classList.replace('btn-primary', 'btn-success');
+    btn.disabled = true;
+}
+</script>
+{{end}}

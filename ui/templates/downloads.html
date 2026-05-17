@@ -1,0 +1,71 @@
+{{template "base.html" .}}
+
+{{define "content"}}
+<h2>Downloads</h2>
+<p class="text-muted">A maximum of 3 concurrent downloads are processed at a time.</p>
+
+<div class="table-responsive mt-4">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Quality</th>
+                <th>Progress</th>
+            </tr>
+        </thead>
+        <tbody id="downloadsTableBody">
+            <!-- Populated via JS -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+function fetchDownloads() {
+    fetch('/api/downloads')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('downloadsTableBody');
+            tbody.innerHTML = '';
+
+            // Sort by added time descending
+            data.sort((a, b) => new Date(b.added_at) - new Date(a.added_at));
+
+            data.forEach(task => {
+                let statusBadge = '';
+                switch(task.status) {
+                    case 'Queued': statusBadge = '<span class="badge bg-secondary">Queued</span>'; break;
+                    case 'Downloading': statusBadge = '<span class="badge bg-primary">Downloading</span>'; break;
+                    case 'Transcoding': statusBadge = '<span class="badge bg-info">Transcoding</span>'; break;
+                    case 'Completed': statusBadge = '<span class="badge bg-success">Completed</span>'; break;
+                    case 'Failed': statusBadge = `<span class="badge bg-danger" title="${task.error}">Failed</span>`; break;
+                }
+
+                let progressHtml = '';
+                if (task.status === 'Downloading' || task.status === 'Transcoding') {
+                    progressHtml = `
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: ${task.progress}%"></div>
+                        </div>
+                    `;
+                } else if (task.status === 'Completed') {
+                    progressHtml = '<span class="text-success small">Done</span>';
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${task.title}</td>
+                    <td>${statusBadge}</td>
+                    <td><span class="badge bg-light text-dark border">${task.quality}</span></td>
+                    <td style="width: 200px;">${progressHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+}
+
+// Poll every 2 seconds
+fetchDownloads();
+setInterval(fetchDownloads, 2000);
+</script>
+{{end}}
