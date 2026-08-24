@@ -14,13 +14,13 @@
 ---
 
 ## Requirements
-- macOS with **Xcode 15.0+**
+- macOS with **Xcode Command Line Tools** / **Apple SDKs**
 - iOS 17.0+ (Simulator or Physical Device)
-- Apple Developer Account (Free Personal Team account is sufficient)
+- Apple Developer Account (Free Personal Team account is sufficient for signing)
 
 ---
 
-## How to Load and Build in Xcode
+## Method A: Graphical Interface (Xcode GUI)
 
 1. **Open the Project**:
    ```bash
@@ -36,33 +36,113 @@
 
 ---
 
-## Instructions for Deploying to a Physical iOS Device
+## Method B: Command-Line Toolchain (Terminal CLI without opening Xcode GUI)
 
-To install `ProxyBrowser` on a real iPhone/iPad for testing:
+You can build, sign, and deploy `ProxyBrowser` completely from the terminal using Apple's command-line toolchain (`xcodebuild`, `xcrun`, `codesign`, `xcrun devicectl` / `ios-deploy`).
 
-### Step 1: Connect Your Device & Select Personal Team
-1. Connect your iPhone/iPad to your Mac using a Lightning/USB-C cable.
-2. In Xcode, click on **ProxyBrowser** (the top-level project in the left Navigator panel).
-3. Select the **ProxyBrowser** target, then click the **Signing & Capabilities** tab.
-4. Under **Team**, select your Apple ID (*Personal Team*).
-   - If no team appears, click **Add an Account...** and sign in with your Apple ID.
-5. Xcode will automatically generate a Provisioning Profile for your device.
+### 1. Build & Run on iOS Simulator via CLI
 
-### Step 2: Enable Developer Mode on iOS (iOS 16/17+)
-1. On your iPhone/iPad, open **Settings**.
-2. Go to **Privacy & Security** -> scroll down to **Developer Mode**.
-3. Toggle **Developer Mode** to **ON**.
-4. Restart your device when prompted and confirm to turn on Developer Mode.
+To compile for the iOS Simulator and launch it without opening Xcode:
 
-### Step 3: Trust Developer Certificate on iOS
-1. In Xcode, select your physical device from the destination menu at the top.
-2. Press `Cmd + R` to build and install the app on your device.
-3. Once installed, if an "Untrusted Developer" dialog appears on your iPhone:
-   - Go to **Settings** -> **General** -> **VPN & Device Management**.
-   - Under *Developer App*, tap your Apple ID email.
-   - Tap **Trust [Your Email]** and confirm.
+```bash
+cd proxybrowser
 
-4. Launch **ProxyBrowser** on your iPhone!
+# 1. List available iOS Simulator devices
+xcrun simctl list devices available | grep iPhone
+
+# 2. Boot a simulator (e.g. iPhone 15 Pro)
+xcrun simctl boot "iPhone 15 Pro"
+open -a Simulator
+
+# 3. Build the app for simulator destination
+xcodebuild -project ProxyBrowser.xcodeproj \
+           -scheme ProxyBrowser \
+           -sdk iphonesimulator \
+           -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+           build
+
+# 4. Install onto the booted simulator
+xcrun simctl install booted build/Release-iphonesimulator/ProxyBrowser.app
+
+# 5. Launch the application
+xcrun simctl launch booted com.example.ProxyBrowser
+```
+
+---
+
+### 2. Build, Code-Sign & Deploy to Physical iOS Device via CLI
+
+#### Step 1: Find your Code Signing Identity & Team ID
+```bash
+# List valid developer signing certificates stored in Keychain
+security find-identity -v -p codesigning
+```
+*(Copy your "Apple Development: your@email.com (XXXXXXXXXX)" identity name or SHA-1 hash)*
+
+#### Step 2: Compile & Sign using `xcodebuild`
+```bash
+cd proxybrowser
+
+# Build & sign for physical iOS device target
+xcodebuild -project ProxyBrowser.xcodeproj \
+           -scheme ProxyBrowser \
+           -sdk iphoneos \
+           -configuration Release \
+           DEVELOPMENT_TEAM="YOUR_TEAM_ID" \
+           CODE_SIGN_IDENTITY="Apple Development" \
+           build
+```
+
+#### Step 3: Package as `.ipa` (Optional for distribution)
+```bash
+mkdir -p Payload
+cp -r build/Release-iphoneos/ProxyBrowser.app Payload/
+zip -r ProxyBrowser.ipa Payload
+rm -rf Payload
+```
+
+#### Step 4: Deploy directly to Connected iPhone/iPad via CLI
+Using `xcrun devicectl` (macOS 14+ / iOS 17+):
+```bash
+# List connected physical devices and get Device Identifier / UUID
+xcrun devicectl list devices
+
+# Install app package onto physical device
+xcrun devicectl device install app --device <DEVICE_UUID> build/Release-iphoneos/ProxyBrowser.app
+
+# Process launch on physical device
+xcrun devicectl device process launch --device <DEVICE_UUID> com.example.ProxyBrowser
+```
+
+*Alternative using open-source `ios-deploy` CLI tool:*
+```bash
+# Install ios-deploy via Homebrew if needed: brew install ios-deploy
+ios-deploy --bundle build/Release-iphoneos/ProxyBrowser.app --debug
+```
+
+---
+
+## Technical Note: Non-macOS / Standalone CLI Toolchains
+
+> **Can iOS apps be compiled on Linux or Windows without macOS?**
+
+Official Apple iOS SDK frameworks (e.g., `UIKit`, `SwiftUI`, `WebKit`, `Network`, `Security`) are proprietary software provided by Apple. Compiling an iOS app requires:
+1. Apple's iOS SDK headers, frameworks, and `swiftc` compiler configured with `arm64-apple-ios17.0` target triples.
+2. Apple's linker (`ld64`) and code-signing tool (`codesign` / `ldid`).
+
+While open-source cross-compiling toolchains (such as `osxcross` / `cctools-port` / `clang`) exist, they require extracting Apple's proprietary SDK files from a macOS installation or Xcode package. On macOS, the Apple Command-Line Tools (`xcodebuild` / `xcrun`) provide the official, fully supported CLI workflow without needing to launch the Xcode graphical app.
+
+---
+
+## Physical Device Setup & iOS Trust Steps
+
+If running on a physical iPhone for the first time:
+
+1. **Enable Developer Mode** on iOS:
+   - Go to **Settings** -> **Privacy & Security** -> **Developer Mode** -> Toggle **ON** and restart device.
+
+2. **Trust Developer Certificate**:
+   - Go to **Settings** -> **General** -> **VPN & Device Management** -> Tap your Apple ID under *Developer App* -> Tap **Trust**.
 
 ---
 

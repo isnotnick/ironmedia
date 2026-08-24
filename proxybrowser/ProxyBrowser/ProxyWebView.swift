@@ -14,7 +14,6 @@ struct ProxyWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
 
-        // Configure SOCKS5 Proxy for iOS 17+
         let store = WKWebsiteDataStore.nonPersistent()
         applyProxySettings(to: store)
         configuration.websiteDataStore = store
@@ -23,7 +22,6 @@ struct ProxyWebView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
-        // Register observers and notification listeners for navigation
         context.coordinator.setupObservers(for: webView)
         context.coordinator.setupNotificationListeners(for: webView)
 
@@ -32,11 +30,19 @@ struct ProxyWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        // If tab URL changed from address bar navigation
-        if let currentURL = uiView.url?.absoluteString, currentURL != tab.urlString, !tab.urlString.isEmpty {
-            if let newURL = URL(string: formattedURLString(tab.urlString)) {
-                uiView.load(URLRequest(url: newURL))
-            }
+        // Dynamically re-apply proxy settings if host/port changed
+        if let store = uiView.configuration.websiteDataStore as? WKWebsiteDataStore {
+            applyProxySettings(to: store)
+        }
+
+        // Only load if explicit new URL from address bar commit (not during active web view link navigation/loading)
+        if !uiView.isLoading,
+           let currentURL = uiView.url?.absoluteString,
+           currentURL != tab.urlString,
+           !tab.urlString.isEmpty,
+           context.coordinator.lastLoadedURLString != tab.urlString {
+            context.coordinator.lastLoadedURLString = tab.urlString
+            loadURLString(tab.urlString, in: uiView)
         }
     }
 
@@ -53,16 +59,20 @@ struct ProxyWebView: UIViewRepresentable {
             port: NWEndpoint.Port(integerLiteral: UInt16(settings.proxyPort))
         )
 
-        let proxyConfig = ProxyConfiguration.socks5(endpoint)
-
-        // Set proxy credentials if available
+        var credential: URLCredential? = nil
         if !settings.proxyUsername.isEmpty || !settings.proxyPassword.isEmpty {
-            let credential = URLCredential(
+            credential = URLCredential(
                 user: settings.proxyUsername,
                 password: settings.proxyPassword,
                 persistence: .forSession
             )
-            proxyConfig.credential = credential
+        }
+
+        let proxyConfig: ProxyConfiguration
+        if let cred = credential {
+            proxyConfig = ProxyConfiguration.socks5(endpoint, credential: cred)
+        } else {
+            proxyConfig = ProxyConfiguration.socks5(endpoint)
         }
 
         store.proxyConfigurations = [proxyConfig]
@@ -77,15 +87,29 @@ struct ProxyWebView: UIViewRepresentable {
         }
 
         let urlString = tab.urlString.isEmpty ? "about:blank" : tab.urlString
-        if urlString == "about:blank" {
+        loadURLString(urlString, in: webView)
+    }
+
+    private func loadURLString(_ text: String, in webView: WKWebView) {
+        let settings = AppSettings.shared
+
+        guard settings.isProxyConfigured else {
+            loadErrorHTML(in: webView, message: "SOCKS5 Proxy is not configured. Please open Settings to set up host and port.")
+            return
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "about:blank" {
             webView.load(URLRequest(url: URL(string: "about:blank")!))
             return
         }
 
-        if let url = URL(string: formattedURLString(urlString)) {
+        let formattedURL = formattedURLString(trimmed)
+
+        if let url = URL(string: formattedURL) {
             webView.load(URLRequest(url: url))
         } else {
-            loadErrorHTML(in: webView, message: "Invalid URL provided: \(urlString)")
+            loadErrorHTML(in: webView, message: "Invalid URL provided: \(text)")
         }
     }
 
@@ -161,6 +185,7 @@ struct ProxyWebView: UIViewRepresentable {
     // MARK: - WKWebView Coordinator
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: ProxyWebView
+        var lastLoadedURLString: String?
         private var progressObservation: NSKeyValueObservation?
         private var titleObservation: NSKeyValueObservation?
         private var notificationObservers: [NSObjectProtocol] = []
@@ -176,24 +201,31 @@ struct ProxyWebView: UIViewRepresentable {
         func setupObservers(for webView: WKWebView) {
             progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] webView, _ in
                 DispatchQueue.main.async {
-                    self?.parent.viewModel.updateActiveTab(progress: webView.estimatedProgress)
+                    if self?.parent.viewModel.activeTabId == self?.parent.tab.id {
+                        self?.parent.viewModel.updateActiveTab(progress: webView.estimatedProgress)
+                    }
                 }
             }
 
             titleObservation = webView.observe(\.title, options: [.new]) { [weak self] webView, _ in
                 DispatchQueue.main.async {
-                    let title = webView.title ?? ""
-                    self?.parent.viewModel.updateActiveTab(title: title.isEmpty ? "New Tab" : title)
+                    if self?.parent.viewModel.activeTabId == self?.parent.tab.id {
+                        let title = webView.title ?? ""
+                        self?.parent.viewModel.updateActiveTab(title: title.isEmpty ? "New Tab" : title)
+                    }
                 }
             }
         }
 
         func setupNotificationListeners(for webView: WKWebView) {
+            let targetTabId = parent.tab.id
+
             let backObs = NotificationCenter.default.addObserver(
                 forName: NSNotification.Name("ProxyWebViewGoBack"),
                 object: nil,
                 queue: .main
-            ) { [weak webView] _ in
+            ) { [weak self, weak webView] _ in
+                guard let self = self, self.parent.viewModel.activeTabId == targetTabId else { return }
                 if webView?.canGoBack == true {
                     webView?.goBack()
                 }
@@ -203,7 +235,8 @@ struct ProxyWebView: UIViewRepresentable {
                 forName: NSNotification.Name("ProxyWebViewGoForward"),
                 object: nil,
                 queue: .main
-            ) { [weak webView] _ in
+            ) { [weak self, weak webView] _ in
+                guard let self = self, self.parent.viewModel.activeTabId == targetTabId else { return }
                 if webView?.canGoForward == true {
                     webView?.goForward()
                 }
@@ -213,7 +246,8 @@ struct ProxyWebView: UIViewRepresentable {
                 forName: NSNotification.Name("ProxyWebViewReload"),
                 object: nil,
                 queue: .main
-            ) { [weak webView] _ in
+            ) { [weak self, weak webView] _ in
+                guard let self = self, self.parent.viewModel.activeTabId == targetTabId else { return }
                 webView?.reload()
             }
 
@@ -222,12 +256,14 @@ struct ProxyWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             DispatchQueue.main.async {
-                self.parent.viewModel.updateActiveTab(
-                    isLoading: true,
-                    canGoBack: webView.canGoBack,
-                    canGoForward: webView.canGoForward,
-                    errorMessage: nil
-                )
+                if self.parent.viewModel.activeTabId == self.parent.tab.id {
+                    self.parent.viewModel.updateActiveTab(
+                        isLoading: true,
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        errorMessage: nil
+                    )
+                }
             }
         }
 
@@ -236,14 +272,18 @@ struct ProxyWebView: UIViewRepresentable {
                 let currentURL = webView.url?.absoluteString ?? ""
                 let pageTitle = webView.title ?? ""
 
-                self.parent.viewModel.updateActiveTab(
-                    urlString: currentURL,
-                    title: pageTitle.isEmpty ? currentURL : pageTitle,
-                    isLoading: false,
-                    canGoBack: webView.canGoBack,
-                    canGoForward: webView.canGoForward,
-                    errorMessage: nil
-                )
+                self.lastLoadedURLString = currentURL
+
+                if self.parent.viewModel.activeTabId == self.parent.tab.id {
+                    self.parent.viewModel.updateActiveTab(
+                        urlString: currentURL,
+                        title: pageTitle.isEmpty ? currentURL : pageTitle,
+                        isLoading: false,
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        errorMessage: nil
+                    )
+                }
 
                 if !currentURL.isEmpty && currentURL != "about:blank" {
                     HistoryManager.shared.addEntry(urlString: currentURL, title: pageTitle)
@@ -267,12 +307,14 @@ struct ProxyWebView: UIViewRepresentable {
                 }
 
                 let errorMsg = "Unable to connect via SOCKS5 proxy: \(error.localizedDescription)"
-                self.parent.viewModel.updateActiveTab(
-                    isLoading: false,
-                    canGoBack: webView.canGoBack,
-                    canGoForward: webView.canGoForward,
-                    errorMessage: errorMsg
-                )
+                if self.parent.viewModel.activeTabId == self.parent.tab.id {
+                    self.parent.viewModel.updateActiveTab(
+                        isLoading: false,
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        errorMessage: errorMsg
+                    )
+                }
                 self.parent.loadErrorHTML(in: webView, message: errorMsg)
             }
         }

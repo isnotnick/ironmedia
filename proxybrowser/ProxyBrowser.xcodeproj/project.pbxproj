@@ -20,6 +20,7 @@
 		A100000B2B0000000000000B /* TabSwitcherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000B2B0000000000000B /* TabSwitcherView.swift */; };
 		A100000C2B0000000000000C /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C2B0000000000000C /* HistoryView.swift */; };
 		A100000D2B0000000000000D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D2B0000000000000D /* SettingsView.swift */; };
+		A10000102B00000000000010 /* DoHService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000102B00000000000010 /* DoHService.swift */; };
 		A100000E2B0000000000000E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000E2B0000000000000E /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +39,7 @@
 		A200000B2B0000000000000B /* TabSwitcherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSwitcherView.swift; sourceTree = "<group>"; };
 		A200000C2B0000000000000C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		A200000D2B0000000000000D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A20000102B00000000000010 /* DoHService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoHService.swift; sourceTree = "<group>"; };
 		A200000E2B0000000000000E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A200000F2B0000000000000F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -67,6 +69,7 @@
 				A200000B2B0000000000000B /* TabSwitcherView.swift */,
 				A200000C2B0000000000000C /* HistoryView.swift */,
 				A200000D2B0000000000000D /* SettingsView.swift */,
+				A20000102B00000000000010 /* DoHService.swift */,
 				A200000E2B0000000000000E /* Assets.xcassets */,
 				A200000F2B0000000000000F /* Info.plist */,
 			);
@@ -163,6 +166,7 @@
 				A100000B2B0000000000000B /* TabSwitcherView.swift in Sources */,
 				A100000C2B0000000000000C /* HistoryView.swift in Sources */,
 				A100000D2B0000000000000D /* SettingsView.swift in Sources */,
+				A10000102B00000000000010 /* DoHService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
